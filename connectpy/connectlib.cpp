@@ -94,6 +94,10 @@ public:
         }
     }
 
+    int getMoves() const {
+        return moves_;
+    }
+
     Status getStatus() const {
         return status_;
     }
@@ -148,6 +152,31 @@ class Solver {
 public:
     Solver() : num_explored_pos_(0) {}
 
+    int negamax(const Board& B) {
+        if (B.getStatus() == Board::Draw) {
+            return 0;
+        } else if (B.getStatus() == Board::Player1Wins
+                || B.getStatus() == Board::Player2Wins) {
+            return (B.getMoves() - Board::WIDTH * Board::HEIGHT) / 2 - 1;
+        }
+        int bestScore = -Board::WIDTH * Board::HEIGHT - 2; // lower bound
+        for (int col = 1; col <= Board::WIDTH; ++col) {
+            if (B.canPlay(col)) {
+                Board B2(B);
+                B2.play(col);
+                int score = -negamax(B2);
+                if (score > bestScore)
+                    bestScore = score;
+                num_explored_pos_++;
+            }
+        }
+        return bestScore;
+    }
+
+    int getNumExploredPos() const {
+        return num_explored_pos_;
+    }
+
 private:
     int num_explored_pos_;
 };
@@ -167,6 +196,7 @@ PYBIND11_MODULE(connectlib, m) {
         .def("canPlay", &Board::canPlay)
         .def("play", static_cast<void (Board::*)(int)>(&Board::play))
         .def("play", static_cast<void (Board::*)(std::string)>(&Board::play))
+        .def_property_readonly("moves", &Board::getMoves)
         .def_property_readonly("status", &Board::getStatus)
 
         // https://github.com/pybind/pybind11/issues/682
@@ -183,5 +213,7 @@ PYBIND11_MODULE(connectlib, m) {
         .export_values();
 
     py::class_<Solver>(m, "Solver")
-        .def(py::init<>());
+        .def(py::init<>())
+        .def("solve", &Solver::negamax)
+        .def_property_readonly("num_explored_pos", &Solver::getNumExploredPos);
 }

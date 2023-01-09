@@ -3,6 +3,45 @@ from .connectlib import Board
 from .connectlib import GameStatus
 from .connectlib import Solver
 
+import os
+import time
+
+class Benchmark:
+    def __init__(self):
+        self.load_benchmarks()
+
+    def load_benchmarks(self):
+        self.benchmark_names = sorted([
+            filename
+            for filename in os.listdir("benchmarks")
+            if filename.startswith("Test_")])
+        self.benchmark_data = dict()
+        for benchmark_name in self.benchmark_names:
+            with open(os.path.join("benchmarks", benchmark_name), "r") as f:
+                for line in f:
+                    (sequence, score_str) = line.split()
+                    self.benchmark_data.setdefault(benchmark_name, []).append(
+                        (sequence, int(score_str)))
+
+    def run(self, benchmark_name):
+        compute_times = []
+        explored_positions = []
+        for (sequence, score) in self.benchmark_data[benchmark_name]:
+            solver = Solver()
+            t0 = time.time()
+            computed_score = solver.solve(Board(sequence))
+            runtime = time.time() - t0
+            assert computed_score == score, (sequence, score, computed_score)
+            compute_times.append(runtime)
+            explored_positions.append(solver.num_explored_pos)
+        N = float(len(compute_times))
+        mean_compute_time = sum(compute_times) / N
+        mean_explored_positions = sum(explored_positions) / N
+        print("mean compute time: %.2f mus" % (mean_compute_time * 1e6,))
+        print("mean explored pos: %.2f" % (mean_explored_positions,))
+        print("K pos / seconds:   %.2f" % (
+            0.001 * mean_explored_positions / mean_compute_time,))
+
 def test_Board():
     def _format(lines):
         large_red_circle    = "\U0001F534"
@@ -38,5 +77,3 @@ def test_Board():
         "OXOXOXO",
         "OXOXOXX   42 moves",
         "OXOXOXO   draw"])
-
-
