@@ -9,6 +9,13 @@ public:
     static const int WIDTH = 7;
     static const int HEIGHT = 6;
 
+    enum Status {
+        InProgress,
+        Draw,
+        Player1Wins,
+        Player2Wins,
+    };
+
     Board() {
         for (int i = 0; i < HEIGHT; ++i)
             for (int j = 0; j < WIDTH; ++j)
@@ -16,7 +23,7 @@ public:
         for (int j = 0; j < WIDTH; ++j)
             height_[j] = 0;
         moves_ = 0;
-        winner_ = 0;
+        status_ = Status::InProgress;
     }
 
     Board(std::string sequence) : Board() {
@@ -40,17 +47,17 @@ public:
             }
             if (i == 1) {
                 os << "   " << moves_ << " moves";
-            } else if (i == 0 && winner_ == 0 && moves_ == WIDTH * HEIGHT) {
-                os << "   draw";
-            } else if (i == 0 && winner_ > 0) {
-                os << "   winner: "
-                   << (winner_ == 1 ? large_red_circle
-                                    : large_yellow_circle);
-            } else if (i == 0) {
+            } else if (i == 0 && status_ == Status::InProgress) {
                 os << "   "
                    << (moves_ % 2 == 0 ? large_red_circle
                                        : large_yellow_circle)
                    << "'s turn";
+            } else if (i == 0 && status_ == Status::Draw) {
+                os << "   draw";
+            } else if (i == 0) {
+                os << "   winner: "
+                   << (status_ == Status::Player1Wins ? large_red_circle
+                                                      : large_yellow_circle);
             }
             if (i > 0)
                 os << "\n";
@@ -59,7 +66,7 @@ public:
     }
 
     bool canPlay(int col) const {
-        return winner_ == 0 && col > 0 && col <= WIDTH
+        return status_ == Status::InProgress && col > 0 && col <= WIDTH
             && height_[col - 1] < HEIGHT;
     }
 
@@ -73,8 +80,11 @@ public:
         board_[height_[col - 1]][col - 1] = player;
         height_[col - 1]++;
         moves_++;
-        if (hasAlignment())
-            winner_ = player;
+        if (hasAlignment()) {
+            status_ = player == 1 ? Status::Player1Wins : Status::Player2Wins;
+        } else if (moves_ == HEIGHT * WIDTH) {
+            status_ = Status::Draw;
+        }
     }
 
     void play(std::string sequence) {
@@ -84,11 +94,15 @@ public:
         }
     }
 
+    Status getStatus() const {
+        return status_;
+    }
+
 private:
     int height_[WIDTH];
     int board_[HEIGHT][WIDTH];
     int moves_;
-    int winner_;
+    Status status_;
 
     bool hasAlignment() const {
         // Horizontal.
@@ -153,10 +167,21 @@ PYBIND11_MODULE(connectlib, m) {
         .def("canPlay", &Board::canPlay)
         .def("play", static_cast<void (Board::*)(int)>(&Board::play))
         .def("play", static_cast<void (Board::*)(std::string)>(&Board::play))
+        .def_property_readonly("status", &Board::getStatus)
 
         // https://github.com/pybind/pybind11/issues/682
         .def_property_readonly_static("WIDTH",
             [](py::object) { return Board::WIDTH; })
         .def_property_readonly_static("HEIGHT",
             [](py::object) { return Board::HEIGHT; });
+
+    py::enum_<Board::Status>(m, "GameStatus")
+        .value("InProgress", Board::Status::InProgress)
+        .value("Draw", Board::Status::Draw)
+        .value("Player1Wins", Board::Status::Player1Wins)
+        .value("Player2Wins", Board::Status::Player2Wins)
+        .export_values();
+
+    py::class_<Solver>(m, "Solver")
+        .def(py::init<>());
 }
