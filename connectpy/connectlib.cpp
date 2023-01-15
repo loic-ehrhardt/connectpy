@@ -73,14 +73,16 @@ public:
     void play(int col) {
         assertCanPlay(col);
         int player = (moves_ % 2) + 1;
-
         if (isWinningMove(col))
             status_ = player == 1 ? Status::Player1Wins : Status::Player2Wins;
+        playWithoutChecks(col);
+    }
 
+    void playWithoutChecks(int col) {
+        int player = (moves_ % 2) + 1;
         board_[height_[col - 1]][col - 1] = player;
         height_[col - 1]++;
         moves_++;
-
         if (status_ == Status::InProgress && moves_ == HEIGHT * WIDTH)
             status_ = Status::Draw;
     }
@@ -218,7 +220,12 @@ private:
 
 class Solver {
 public:
-    Solver() : num_explored_pos_(0) {}
+    Solver() : num_explored_pos_(0) {
+        // Explore columns from the middle first.
+        for (int i = 0; i < Board::WIDTH; ++i)
+            column_order_[i] = Board::WIDTH / 2
+                + ( 1 - 2 * (i % 2)) * (i + 1) / 2 + 1;
+    }
 
     int negamax(const Board& B) {
         int max_score = Board::WIDTH * Board::HEIGHT / 2;
@@ -259,10 +266,10 @@ public:
         }
 
         // Recursive exploration.
-        for (int col = 1; col <= Board::WIDTH; ++col) {
-            if (B.canPlay(col)) {
+        for (int i = 0; i <= Board::WIDTH; ++i) {
+            if (B.canPlay(column_order_[i])) {
                 Board B2(B);
-                B2.play(col);
+                B2.playWithoutChecks(column_order_[i]);
                 int score = -negamax(B2, -beta, -alpha);
                 if (score >= beta) {
                     // Outside research range (can happen for weak solver).
@@ -281,7 +288,8 @@ public:
     }
 
 private:
-    int num_explored_pos_;
+    uint64_t num_explored_pos_;
+    int column_order_[Board::WIDTH];
 };
 
 

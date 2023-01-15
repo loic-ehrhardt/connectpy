@@ -24,7 +24,8 @@ class Benchmark:
                         (sequence, int(score_str)))
 
     def run_all(self):
-        for benchmark_name in ["Test_L3_R1"]:
+        for benchmark_name in ["Test_L3_R1",
+                               "Test_L2_R1"]:
             print(f"=== {benchmark_name} weak ===")
             self.run(benchmark_name, use_weak_solver=True)
             print()
