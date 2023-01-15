@@ -23,15 +23,35 @@ class Benchmark:
                     self.benchmark_data.setdefault(benchmark_name, []).append(
                         (sequence, int(score_str)))
 
-    def run(self, benchmark_name):
+    def run_all(self):
+        for benchmark_name in ["Test_L3_R1"]:
+            print(f"=== {benchmark_name} weak ===")
+            self.run(benchmark_name, use_weak_solver=True)
+            print()
+            print(f"=== {benchmark_name} strong ===")
+            self.run(benchmark_name, use_weak_solver=False)
+            print()
+
+    def run(self, benchmark_name, use_weak_solver=False):
+        def _sign(x):
+            if x == 0:
+                return 0
+            return x / abs(x)
+        if use_weak_solver:
+            solve_func = lambda s, b: s.solve_weak(b)
+        else:
+            solve_func = lambda s, b: s.solve(b)
+
         compute_times = []
         explored_positions = []
         for (sequence, score) in self.benchmark_data[benchmark_name]:
             solver = Solver()
             t0 = time.time()
-            computed_score = solver.solve(Board(sequence))
+            computed_score = solve_func(solver, Board(sequence))
             runtime = time.time() - t0
-            assert computed_score == score, (sequence, score, computed_score)
+            assert computed_score == (
+                _sign(score) if use_weak_solver else score), (
+                    sequence, score, computed_score)
             compute_times.append(runtime)
             explored_positions.append(solver.num_explored_pos)
         N = float(len(compute_times))

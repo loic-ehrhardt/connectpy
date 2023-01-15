@@ -1,18 +1,11 @@
 # In parentheses, values from reference implementation
 # http://blog.gamesolver.org/solving-connect-four/
 
-part2
+part3 - MinMax
                      time               num pos         Kpos/s
-Test_L3_R1 (weak)    -                  -               -
 Test_L3_R1 (strong)  639mus(790.28mus)  11'024(11'024)  17'240(13'950)
-Test_L2_R1 (weak)    -                  -               -
-Test_L2_R1 (strong)  -                  -               -
-Test_L2_R2 (weak)    -                  -               -
-Test_L2_R2 (strong)  -                  -               -
-Test_L1_R1 (weak)    -                  -               -
-Test_L1_R1 (strong)  -                  -               -
-Test_L1_R2 (weak)    -                  -               -
-Test_L1_R2 (strong)  -                  -               -
-Test_L1_R3 (weak)    -                  -               -
-Test_L1_R3 (strong)  -                  -               -
 
+part4 - Alpha Beta
+                     time          num pos       Kpos/s
+Test_L3_R1 (weak)    22mus(52mus)  222.9(222.9)  10'158(4'284)
+Test_L3_R1 (strong)  27mus(69mus)  283.6(283.6)  10'455(4'074)

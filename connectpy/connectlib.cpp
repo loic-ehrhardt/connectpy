@@ -221,7 +221,14 @@ public:
     Solver() : num_explored_pos_(0) {}
 
     int negamax(const Board& B) {
+        int max_score = Board::WIDTH * Board::HEIGHT / 2;
+        return negamax(B, -max_score, max_score);
+    }
+
+    int negamax(const Board& B, int alpha, int beta) {
         num_explored_pos_++;
+
+        // Check board status.
         if (B.getStatus() == Board::Draw) {
             return 0;
         } else if (B.getStatus() == Board::Player1Wins
@@ -229,24 +236,44 @@ public:
             return (B.getMoves() - Board::WIDTH * Board::HEIGHT) / 2 - 1;
         }
 
+        int max_score = (1 + Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2; // direct win
+
         // Shortcut if direct win.
         for (int col = 1; col <= Board::WIDTH; ++col) {
             if (B.isWinningMove(col)) {
-                return 1 - (B.getMoves() + 1 - Board::WIDTH * Board::HEIGHT) / 2;
+                return max_score;
+            }
+        }
+        // Cannot win directly, max score decreases.
+        max_score--;
+
+        // Prune beta with max score.
+        if (max_score < beta) {
+            beta = max_score;
+            if (alpha >= beta) {
+                // Empty alpha-beta range.
+                if (alpha > beta)
+                    throw std::runtime_error("alpha > beta ?");
+                return beta;
             }
         }
 
-        int bestScore = -Board::WIDTH * Board::HEIGHT - 2; // lower bound
+        // Recursive exploration.
         for (int col = 1; col <= Board::WIDTH; ++col) {
             if (B.canPlay(col)) {
                 Board B2(B);
                 B2.play(col);
-                int score = -negamax(B2);
-                if (score > bestScore)
-                    bestScore = score;
+                int score = -negamax(B2, -beta, -alpha);
+                if (score >= beta) {
+                    // Outside research range (can happen for weak solver).
+                    return beta;
+                } else if (score > alpha) {
+                    // Prune alpha (keeps track of best score).
+                    alpha = score;
+                }
             }
         }
-        return bestScore;
+        return alpha; // best score obtained.
     }
 
     int getNumExploredPos() const {
@@ -290,6 +317,9 @@ PYBIND11_MODULE(connectlib, m) {
 
     py::class_<Solver>(m, "Solver")
         .def(py::init<>())
-        .def("solve", &Solver::negamax)
+        .def("solve", [](Solver& s, const Board& b)
+            { return s.negamax(b); })
+        .def("solve_weak", [](Solver& s, const Board& b)
+            { return s.negamax(b, -1, 1); })
         .def_property_readonly("num_explored_pos", &Solver::getNumExploredPos);
 }
