@@ -1,0 +1,18 @@
+# In parentheses, values from reference implementation
+# http://blog.gamesolver.org/solving-connect-four/
+
+part2
+                     time               num pos         Kpos/s
+Test_L3_R1 (weak)    -                  -               -
+Test_L3_R1 (strong)  639mus(790.28mus)  11'024(11'024)  17'240(13'950)
+Test_L2_R1 (weak)    -                  -               -
+Test_L2_R1 (strong)  -                  -               -
+Test_L2_R2 (weak)    -                  -               -
+Test_L2_R2 (strong)  -                  -               -
+Test_L1_R1 (weak)    -                  -               -
+Test_L1_R1 (strong)  -                  -               -
+Test_L1_R2 (weak)    -                  -               -
+Test_L1_R2 (strong)  -                  -               -
+Test_L1_R3 (weak)    -                  -               -
+Test_L1_R3 (strong)  -                  -               -
+

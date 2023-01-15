@@ -37,7 +37,7 @@ class Benchmark:
         N = float(len(compute_times))
         mean_compute_time = sum(compute_times) / N
         mean_explored_positions = sum(explored_positions) / N
-        print("mean compute time: %.2f mus" % (mean_compute_time * 1e6,))
+        print("mean compute time: %.3f ms" % (mean_compute_time * 1e3,))
         print("mean explored pos: %.2f" % (mean_explored_positions,))
         print("K pos / seconds:   %.2f" % (
             0.001 * mean_explored_positions / mean_compute_time,))

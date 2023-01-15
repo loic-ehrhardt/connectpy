@@ -71,20 +71,18 @@ public:
     }
 
     void play(int col) {
-        if (!canPlay(col)) {
-            std::ostringstream os;
-            os << "Cannot play there (" << col << ").";
-            throw std::runtime_error(os.str());
-        }
+        assertCanPlay(col);
         int player = (moves_ % 2) + 1;
+
+        if (isWinningMove(col))
+            status_ = player == 1 ? Status::Player1Wins : Status::Player2Wins;
+
         board_[height_[col - 1]][col - 1] = player;
         height_[col - 1]++;
         moves_++;
-        if (hasAlignment()) {
-            status_ = player == 1 ? Status::Player1Wins : Status::Player2Wins;
-        } else if (moves_ == HEIGHT * WIDTH) {
+
+        if (status_ == Status::InProgress && moves_ == HEIGHT * WIDTH)
             status_ = Status::Draw;
-        }
     }
 
     void play(std::string sequence) {
@@ -92,6 +90,68 @@ public:
             int col = (int) (sequence[i] - '1') + 1;
             play(col);
         }
+    }
+
+    bool isWinningMove(int col) const {
+        if (!canPlay(col))
+            return false;
+        int player = (moves_ % 2) + 1;
+        int j = col - 1;
+        int i = height_[j];
+        // Vertical.
+        if (i >= 3 && board_[i - 1][j] == player
+               && board_[i - 2][j] == player
+               && board_[i - 3][j] == player)
+            return true;
+        // Horizontal.
+        int h;
+        int n = 1;
+        for (h = 1; h <= 3; ++h) {
+            if (j - h < 0 || board_[i][j - h] != player)
+                break;
+            n++;
+        }
+        for (h = 1; h <= 3; ++h) {
+            if (j + h >= WIDTH || board_[i][j + h] != player)
+                break;
+            n++;
+        }
+        if (n >= 4)
+            return true;
+        // Diagonal (/).
+        n = 1;
+        for (h = 1; h <= 3; ++h) {
+            if (j - h < 0 || i - h < 0
+                    || board_[i - h][j - h] != player)
+                break;
+            n++;
+        }
+        for (h = 1; h <= 3; ++h) {
+            if (j + h >= WIDTH || i + h >= HEIGHT
+                || board_[i + h][j + h] != player)
+                break;
+            n++;
+        }
+        if (n >= 4)
+            return true;
+        // Diagonal (\).
+        n = 1;
+        for (h = 1; h <= 3; ++h) {
+            if (j - h < 0 || i + h >= HEIGHT
+                    || board_[i + h][j - h] != player)
+                break;
+            n++;
+        }
+        for (h = 1; h <= 3; ++h) {
+            if (j + h >= WIDTH || i - h < 0
+                || board_[i - h][j + h] != player)
+                break;
+            n++;
+        }
+        if (n >= 4)
+            return true;
+        // No alignment.
+        return false;
     }
 
     int getMoves() const {
@@ -146,6 +206,14 @@ private:
         }
         return false;
     }
+
+    void assertCanPlay(int col) const {
+        if (canPlay(col))
+        return;
+        std::ostringstream os;
+        os << "Cannot play there (" << col << ").";
+        throw std::runtime_error(os.str());
+    }
 };
 
 class Solver {
@@ -153,12 +221,21 @@ public:
     Solver() : num_explored_pos_(0) {}
 
     int negamax(const Board& B) {
+        num_explored_pos_++;
         if (B.getStatus() == Board::Draw) {
             return 0;
         } else if (B.getStatus() == Board::Player1Wins
                 || B.getStatus() == Board::Player2Wins) {
             return (B.getMoves() - Board::WIDTH * Board::HEIGHT) / 2 - 1;
         }
+
+        // Shortcut if direct win.
+        for (int col = 1; col <= Board::WIDTH; ++col) {
+            if (B.isWinningMove(col)) {
+                return 1 - (B.getMoves() + 1 - Board::WIDTH * Board::HEIGHT) / 2;
+            }
+        }
+
         int bestScore = -Board::WIDTH * Board::HEIGHT - 2; // lower bound
         for (int col = 1; col <= Board::WIDTH; ++col) {
             if (B.canPlay(col)) {
@@ -167,7 +244,6 @@ public:
                 int score = -negamax(B2);
                 if (score > bestScore)
                     bestScore = score;
-                num_explored_pos_++;
             }
         }
         return bestScore;
