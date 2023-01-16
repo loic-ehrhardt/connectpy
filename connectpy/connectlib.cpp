@@ -8,6 +8,8 @@ class Board {
 public:
     static const int WIDTH = 7;
     static const int HEIGHT = 6;
+    static_assert(WIDTH < 10);
+    static_assert(WIDTH * (HEIGHT + 1) <= 64);
 
     enum Status {
         InProgress,
@@ -16,15 +18,7 @@ public:
         Player2Wins,
     };
 
-    Board() {
-        for (int i = 0; i < HEIGHT; ++i)
-            for (int j = 0; j < WIDTH; ++j)
-                board_[i][j] = 0;
-        for (int j = 0; j < WIDTH; ++j)
-            height_[j] = 0;
-        moves_ = 0;
-        status_ = Status::InProgress;
-    }
+    Board() : mask_(0), position_(0), moves_(0), status_(Status::InProgress) {}
 
     Board(std::string sequence) : Board() {
         play(sequence);
@@ -37,12 +31,13 @@ public:
         std::ostringstream os;
         for (int i = HEIGHT - 1; i >= 0; --i) {
             for (int j = 0; j < WIDTH; ++j) {
-                if (board_[i][j] == 1) {
-                    os << large_red_circle;;
-                } else if (board_[i][j] == 2) {
-                    os << large_yellow_circle;
-                } else {
+                uint64_t bitmask = UINT64_C(1) << i << j * (HEIGHT + 1);
+                if ((mask_ & bitmask) == 0) {
                     os << white_square_button;
+                } else if (((position_ & bitmask) == 0) ^ ((moves_ % 2) == 0)) {
+                    os << large_red_circle;
+                } else {
+                    os << large_yellow_circle;
                 }
             }
             if (i == 1) {
@@ -66,94 +61,63 @@ public:
     }
 
     bool canPlay(int col) const {
-        return status_ == Status::InProgress && col > 0 && col <= WIDTH
-            && height_[col - 1] < HEIGHT;
+        return status_ == Status::InProgress && col >= 0 && col < WIDTH
+            && (mask_ & topMask(col)) == 0;
     }
 
-    void play(int col) {
-        assertCanPlay(col);
-        int player = (moves_ % 2) + 1;
-        if (isWinningMove(col))
-            status_ = player == 1 ? Status::Player1Wins : Status::Player2Wins;
-        playWithoutChecks(col);
+    void assertCanPlay(int col) const {
+        if (canPlay(col))
+            return;
+        std::ostringstream os;
+        os << "Cannot play there (" << col << ").";
+        throw std::runtime_error(os.str());
     }
 
-    void playWithoutChecks(int col) {
-        int player = (moves_ % 2) + 1;
-        board_[height_[col - 1]][col - 1] = player;
-        height_[col - 1]++;
+    void play(int col, bool check_alignment=true) {
+        position_ ^= mask_;
+        mask_ |= mask_ + bottomMask(col);
+
+        if (check_alignment && hasAlignment(position_ ^ mask_))
+            status_ = (moves_ % 2) == 0 ? Status::Player1Wins : Status::Player2Wins;
+
         moves_++;
+
         if (status_ == Status::InProgress && moves_ == HEIGHT * WIDTH)
             status_ = Status::Draw;
     }
 
     void play(std::string sequence) {
-        for (int i = 0; i < sequence.size(); i++) {
-            int col = (int) (sequence[i] - '1') + 1;
+        for (unsigned int i = 0; i < sequence.size(); i++) {
+            int col = (int) (sequence[i] - '1'); // "1" -> 0, "2" -> 1, etc.
+            assertCanPlay(col);
             play(col);
         }
     }
 
-    bool isWinningMove(int col) const {
-        if (!canPlay(col))
-            return false;
-        int player = (moves_ % 2) + 1;
-        int j = col - 1;
-        int i = height_[j];
-        // Vertical.
-        if (i >= 3 && board_[i - 1][j] == player
-               && board_[i - 2][j] == player
-               && board_[i - 3][j] == player)
-            return true;
+    static bool hasAlignment(uint64_t pos) {
         // Horizontal.
-        int h;
-        int n = 1;
-        for (h = 1; h <= 3; ++h) {
-            if (j - h < 0 || board_[i][j - h] != player)
-                break;
-            n++;
-        }
-        for (h = 1; h <= 3; ++h) {
-            if (j + h >= WIDTH || board_[i][j + h] != player)
-                break;
-            n++;
-        }
-        if (n >= 4)
-            return true;
-        // Diagonal (/).
-        n = 1;
-        for (h = 1; h <= 3; ++h) {
-            if (j - h < 0 || i - h < 0
-                    || board_[i - h][j - h] != player)
-                break;
-            n++;
-        }
-        for (h = 1; h <= 3; ++h) {
-            if (j + h >= WIDTH || i + h >= HEIGHT
-                || board_[i + h][j + h] != player)
-                break;
-            n++;
-        }
-        if (n >= 4)
+        uint64_t m = pos & (pos << (HEIGHT + 1));
+        if (m & (m << (2 * (HEIGHT + 1))))
             return true;
         // Diagonal (\).
-        n = 1;
-        for (h = 1; h <= 3; ++h) {
-            if (j - h < 0 || i + h >= HEIGHT
-                    || board_[i + h][j - h] != player)
-                break;
-            n++;
-        }
-        for (h = 1; h <= 3; ++h) {
-            if (j + h >= WIDTH || i - h < 0
-                || board_[i - h][j + h] != player)
-                break;
-            n++;
-        }
-        if (n >= 4)
+        m = pos & (pos << HEIGHT);
+        if (m & (m << (2 * HEIGHT)))
             return true;
-        // No alignment.
+        // Diagonal (/).
+        m = pos & (pos << (HEIGHT + 2));
+        if (m & (m << (2 * (HEIGHT + 2))))
+            return true;
+        // Vertical.
+        m = pos & (pos << 1);
+        if (m & (m << 2))
+            return true;
+        // No alignment found.
         return false;
+    }
+
+    bool isWinningMove(int col) const {
+        return hasAlignment(position_ | (
+            (mask_ + bottomMask(col)) & columnMask(col)));
     }
 
     int getMoves() const {
@@ -165,56 +129,33 @@ public:
     }
 
 private:
-    int height_[WIDTH];
-    int board_[HEIGHT][WIDTH];
+    // Positions are stored with two bitfields. The bits correspond to the
+    // following positions:
+    //     .   .   .   .   .   .   .
+    //     5  12  19  26  33  40  47
+    //     4  11  18  25  32  39  46
+    //     3  10  17  24  31  38  45
+    //     2   9  16  23  30  37  44
+    //     1   8  15  22  29  36  43
+    //     0   7  14  21  28  35  42
+    // mask is 1 for non-empty cells:
+    uint64_t mask_;
+    // position is 1 if a non-empty cell is for the current player:
+    uint64_t position_;
+
     int moves_;
     Status status_;
 
-    bool hasAlignment() const {
-        // Horizontal.
-        for (int i = 0; i < HEIGHT; ++i) {
-            for (int j = 0; j < WIDTH - 3; ++j) {
-                if (board_[i][j] > 0
-                        && board_[i][j] == board_[i][j + 1]
-                        && board_[i][j] == board_[i][j + 2]
-                        && board_[i][j] == board_[i][j + 3])
-                    return true;
-            }
-        }
-        // Vertical.
-        for (int i = 0; i < HEIGHT - 3; ++i) {
-            for (int j = 0; j < WIDTH; ++j) {
-                if (board_[i][j] > 0
-                        && board_[i][j] == board_[i + 1][j]
-                        && board_[i][j] == board_[i + 2][j]
-                        && board_[i][j] == board_[i + 3][j])
-                    return true;
-            }
-        }
-        // Diagonal.
-        for (int i = 0; i < HEIGHT - 3; ++i) {
-            for (int j = 0; j < WIDTH - 3; ++j) {
-                if (board_[i][j] > 0
-                        && board_[i][j] == board_[i + 1][j + 1]
-                        && board_[i][j] == board_[i + 2][j + 2]
-                        && board_[i][j] == board_[i + 3][j + 3])
-                    return true;
-                if (board_[i + 3][j] > 0
-                        && board_[i + 3][j] == board_[i + 2][j + 1]
-                        && board_[i + 3][j] == board_[i + 1][j + 2]
-                        && board_[i + 3][j] == board_[i][j + 3])
-                    return true;
-            }
-        }
-        return false;
+    static uint64_t topMask(int col) {
+        return (UINT64_C(1) << (HEIGHT - 1)) << col * (HEIGHT + 1);
     }
 
-    void assertCanPlay(int col) const {
-        if (canPlay(col))
-        return;
-        std::ostringstream os;
-        os << "Cannot play there (" << col << ").";
-        throw std::runtime_error(os.str());
+    static uint64_t bottomMask(int col) {
+        return UINT64_C(1) << col * (HEIGHT + 1);
+    }
+
+    static uint64_t columnMask(int col) {
+        return ((UINT64_C(1) << HEIGHT) - 1) << col * (HEIGHT + 1);
     }
 };
 
@@ -224,7 +165,7 @@ public:
         // Explore columns from the middle first.
         for (int i = 0; i < Board::WIDTH; ++i)
             column_order_[i] = Board::WIDTH / 2
-                + ( 1 - 2 * (i % 2)) * (i + 1) / 2 + 1;
+                + ( 1 - 2 * (i % 2)) * (i + 1) / 2;
     }
 
     int negamax(const Board& B) {
@@ -246,8 +187,8 @@ public:
         int max_score = (1 + Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2; // direct win
 
         // Shortcut if direct win.
-        for (int col = 1; col <= Board::WIDTH; ++col) {
-            if (B.isWinningMove(col)) {
+        for (int col = 0; col < Board::WIDTH; ++col) {
+            if (B.canPlay(col) && B.isWinningMove(col)) {
                 return max_score;
             }
         }
@@ -266,10 +207,10 @@ public:
         }
 
         // Recursive exploration.
-        for (int i = 0; i <= Board::WIDTH; ++i) {
+        for (int i = 0; i < Board::WIDTH; ++i) {
             if (B.canPlay(column_order_[i])) {
                 Board B2(B);
-                B2.playWithoutChecks(column_order_[i]);
+                B2.play(column_order_[i], false);
                 int score = -negamax(B2, -beta, -alpha);
                 if (score >= beta) {
                     // Outside research range (can happen for weak solver).
@@ -295,8 +236,6 @@ private:
 
 
 
-
-
 PYBIND11_MODULE(connectlib, m) {
     py::class_<Board>(m, "Board")
         .def(py::init<>())
@@ -304,9 +243,10 @@ PYBIND11_MODULE(connectlib, m) {
         .def("__repr__",
             [](const Board& b) { return b.toString(); })
 
-        .def("canPlay", &Board::canPlay)
-        .def("play", static_cast<void (Board::*)(int)>(&Board::play))
         .def("play", static_cast<void (Board::*)(std::string)>(&Board::play))
+        .def("play", [](Board& b, int col) {
+                b.assertCanPlay(col - 1);
+                b.play(col - 1); })
         .def_property_readonly("moves", &Board::getMoves)
         .def_property_readonly("status", &Board::getStatus)
 

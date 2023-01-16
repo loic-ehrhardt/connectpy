@@ -16,3 +16,10 @@ Test_L3_R1 (weak)    11mus(41mus)   107.1(107.1)          9'825(3'417)
 Test_L3_R1 (strong)  13mus(31mus)   139.7(139.7)          10'367(3'438)
 Test_L2_R1 (weak)    46mus(77ms)    927'943(927'943)      20'060(12'031)
 Test_L2_R1 (strong)  127mus(189ms)  2'081'790(2'081'790)  16'431(11'009)
+
+part6 - Bitboard
+                     time          num pos               Kpos/s
+Test_L3_R1 (weak)    4mus(6.7mus)  107.1(107.1)          25'934(15'973)
+Test_L3_R1 (strong)  5mus(8.5mus)  139.7(139.7)          25'581(16'334)
+Test_L2_R1 (weak)    18ms(14.7ms)  927'943(927'943)      51'229(63'149)
+Test_L2_R1 (strong)  48ms(33.3ms)  2'081'790(2'081'790)  48'881(62'504)
