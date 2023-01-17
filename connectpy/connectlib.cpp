@@ -1,8 +1,10 @@
-#include <pybind11/pybind11.h>
-#include <sstream>
 #include <iostream>
+#include <sstream>
+#include <vector>
 
+#include <pybind11/pybind11.h>
 namespace py = pybind11;
+
 
 class Board {
 public:
@@ -128,6 +130,10 @@ public:
         return status_;
     }
 
+    uint64_t key() const {
+        return position_ + mask_;
+    }
+
 private:
     // Positions are stored with two bitfields. The bits correspond to the
     // following positions:
@@ -159,9 +165,58 @@ private:
     }
 };
 
+
+class TranspositionTable {
+public:
+    TranspositionTable(size_t size) : data_(size) {
+        if (size <= 0)
+            throw std::runtime_error("size <= 0");
+        reset();
+    }
+
+    void put(uint64_t key, int8_t value) {
+        data_[index(key)] = {key, value};
+    }
+
+    std::pair<bool, int8_t> get(uint64_t key) const {
+        Entry entry = data_[index(key)];
+        if (entry.key != key || entry.value == 127)
+            return std::make_pair(false, 0);
+        return std::make_pair(true, entry.value);
+    }
+
+    void reset() {
+        memset(&data_[0], 127, data_.size() * sizeof(Entry));
+    }
+
+    size_t size() const {
+        return data_.size();
+    }
+
+private:
+    struct Entry {
+        uint64_t key: 56;
+        int8_t value;
+    };
+    static_assert(sizeof(Entry) == 8);
+
+    std::vector<Entry> data_;
+
+    unsigned int index(uint64_t key) const {
+        if (key >> 56 != 0)
+            throw std::runtime_error("key >= 2 ** 56");
+        return key % data_.size();
+    }
+};
+
+
 class Solver {
 public:
-    Solver() : num_explored_pos_(0) {
+    Solver() : num_explored_pos_(0),
+               // Use a table size of 64 MiB.
+               // In practice using a close prime number for the size as this
+               // decreases the hit ratio.
+               max_score_table_(8388593) {
         // Explore columns from the middle first.
         for (int i = 0; i < Board::WIDTH; ++i)
             column_order_[i] = Board::WIDTH / 2
@@ -195,13 +250,16 @@ public:
         // Cannot win directly, max score decreases.
         max_score--;
 
+        // Possibly reduce further max_score using the transposition table.
+        std::pair<bool, int8_t> found = max_score_table_.get(B.key());
+        if (found.first)
+            max_score = found.second;
+
         // Prune beta with max score.
         if (max_score < beta) {
             beta = max_score;
             if (alpha >= beta) {
                 // Empty alpha-beta range.
-                if (alpha > beta)
-                    throw std::runtime_error("alpha > beta ?");
                 return beta;
             }
         }
@@ -221,19 +279,26 @@ public:
                 }
             }
         }
-        return alpha; // best score obtained.
+
+        // alpha: best score obtained.
+        max_score_table_.put(B.key(), alpha);
+        return alpha;
     }
 
-    int getNumExploredPos() const {
+    uint64_t getNumExploredPos() const {
         return num_explored_pos_;
+    }
+
+    void reset() {
+        num_explored_pos_ = 0;
+        max_score_table_.reset();
     }
 
 private:
     uint64_t num_explored_pos_;
     int column_order_[Board::WIDTH];
+    TranspositionTable max_score_table_;
 };
-
-
 
 
 PYBIND11_MODULE(connectlib, m) {
@@ -269,5 +334,13 @@ PYBIND11_MODULE(connectlib, m) {
             { return s.negamax(b); })
         .def("solve_weak", [](Solver& s, const Board& b)
             { return s.negamax(b, -1, 1); })
-        .def_property_readonly("num_explored_pos", &Solver::getNumExploredPos);
+        .def_property_readonly("num_explored_pos", &Solver::getNumExploredPos)
+        .def("reset", &Solver::reset);
+
+    py::class_<TranspositionTable>(m, "TranspositionTable")
+        .def(py::init<size_t>())
+        .def("__len__", &TranspositionTable::size)
+        .def("__getitem__", &TranspositionTable::get)
+        .def("__setitem__", &TranspositionTable::put)
+        .def("reset", &TranspositionTable::reset);
 }

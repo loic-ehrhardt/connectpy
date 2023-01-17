@@ -2,24 +2,38 @@
 # http://blog.gamesolver.org/solving-connect-four/
 
 part3 - MinMax
-                     time               num pos         Kpos/s
-Test_L3_R1 (strong)  639mus(790.28mus)  11'024(11'024)  17'240(13'950)
+                     time            num pos    Mpos/s
+Test_L3_R1 (strong)  639mus(790mus)  11.02K(=)  17(14)
 
 part4 - Alpha Beta
-                     time          num pos       Kpos/s
-Test_L3_R1 (weak)    22mus(52mus)  222.9(222.9)  10'158(4'284)
-Test_L3_R1 (strong)  27mus(69mus)  283.6(283.6)  10'455(4'074)
+                     time            num pos    Mpos/s
+Test_L3_R1 (weak)    22mus(52mus)    222.9(=)   10(4)
+Test_L3_R1 (strong)  27mus(69mus)    283.6(=)   10(4)
 
 part5 - Column exploration order
-                     time           num pos               Kpos/s
-Test_L3_R1 (weak)    11mus(41mus)   107.1(107.1)          9'825(3'417)
-Test_L3_R1 (strong)  13mus(31mus)   139.7(139.7)          10'367(3'438)
-Test_L2_R1 (weak)    46mus(77ms)    927'943(927'943)      20'060(12'031)
-Test_L2_R1 (strong)  127mus(189ms)  2'081'790(2'081'790)  16'431(11'009)
+                     time            num pos    Mpos/s
+Test_L3_R1 (weak)    11mus(41mus)    107.1(=)   10(3)
+Test_L3_R1 (strong)  13mus(31mus)    139.7(=)   10(3)
+Test_L2_R1 (weak)    46ms(77ms)      927.9K(=)  20(12)
+Test_L2_R1 (strong)  127ms(189ms)    2.081M(=)  16(11)
 
 part6 - Bitboard
-                     time          num pos               Kpos/s
-Test_L3_R1 (weak)    4mus(6.7mus)  107.1(107.1)          25'934(15'973)
-Test_L3_R1 (strong)  5mus(8.5mus)  139.7(139.7)          25'581(16'334)
-Test_L2_R1 (weak)    18ms(14.7ms)  927'943(927'943)      51'229(63'149)
-Test_L2_R1 (strong)  48ms(33.3ms)  2'081'790(2'081'790)  48'881(62'504)
+                     time            num pos    Mpos/s
+Test_L3_R1 (weak)    4mus(6.7mus)    107.1(=)   26(16)
+Test_L3_R1 (strong)  5mus(8.5mus)    139.7(=)   26(16)
+Test_L2_R1 (weak)    18ms(14.7ms)    927.9K(=)  51(63)
+Test_L2_R1 (strong)  48ms(33.3ms)    2.081M(=)  49(63)
+
+part7 - Transposition Table
+                     time            num pos    Mpos/s
+Test_L3_R1 (weak)    13mus(5.2mus)   68.7(=)    5(13)
+Test_L3_R1 (strong)  14mus(6.5mus)   92.8(=)    7(14)
+Test_L2_R1 (weak)    1.1ms(1.1ms)    28.75K(=)  26(27)
+Test_L2_R1 (strong)  5.9ms(5.6ms)    207.9K(=)  35(37)
+Test_L2_R2 (weak)    24ms(24ms)      752.3K(=)  30(32)
+Test_L2_R2 (strong)  55ms(52ms)      1.731M(=)  31(33)
+Test_L1_R1 (weak)    2.1s(1.6s)      52.84M(=)  26(33)
+Test_L1_R1 (strong)  6.6s(4.7s)      156.4M(=)  24(33)
+Test_L1_R2 (weak)    2.5s(1.8s)      63.93M(=)  26(36)
+Test_L1_R2 (strong)  11.5s(8.2s)     306.1M(=)  27(37)
+

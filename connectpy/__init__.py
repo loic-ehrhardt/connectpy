@@ -2,9 +2,11 @@ from . import connectlib as cpp
 from .connectlib import Board
 from .connectlib import GameStatus
 from .connectlib import Solver
+from .connectlib import TranspositionTable
 
 import os
 import time
+import sys
 
 class Benchmark:
     def __init__(self):
@@ -25,13 +27,17 @@ class Benchmark:
 
     def run_all(self):
         for benchmark_name in ["Test_L3_R1",
-                               "Test_L2_R1"]:
+                               "Test_L2_R1",
+                               "Test_L2_R2",
+                               "Test_L1_R1",
+                               "Test_L1_R2"]:
             print(f"=== {benchmark_name} weak ===")
             self.run(benchmark_name, use_weak_solver=True)
             print()
             print(f"=== {benchmark_name} strong ===")
             self.run(benchmark_name, use_weak_solver=False)
             print()
+            sys.stdout.flush()
 
     def run(self, benchmark_name, use_weak_solver=False):
         def _sign(x):
@@ -45,8 +51,9 @@ class Benchmark:
 
         compute_times = []
         explored_positions = []
+        solver = Solver()
         for (sequence, score) in self.benchmark_data[benchmark_name]:
-            solver = Solver()
+            solver.reset()
             t0 = time.time()
             computed_score = solve_func(solver, Board(sequence))
             runtime = time.time() - t0
