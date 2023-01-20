@@ -37,3 +37,9 @@ Test_L1_R1 (strong)  6.6s(4.7s)      156.4M(=)  24(33)
 Test_L1_R2 (weak)    2.5s(1.8s)      63.93M(=)  26(36)
 Test_L1_R2 (strong)  11.5s(8.2s)     306.1M(=)  27(37)
 
+part8 - Iterative Deepening
+Test_L1_R1 (weak)    1.4s(1.1s)      36.35M(=)  25(33)
+Test_L1_R1 (strong)  12ms(9.2ms)     236.6K(=)  20(26)
+Test_L1_R2 (weak)    2.3s(1.8s)      63.56M(=)  28(36)
+Test_L1_R2 (strong)  6.4s(4.8s)      183.6M(x)  28(38)
+

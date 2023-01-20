@@ -285,6 +285,33 @@ public:
         return alpha;
     }
 
+    int dichotomicSolve(const Board& B, bool use_weak_solver = false) {
+        int min_score, max_score;
+        if (use_weak_solver) {
+            min_score = -1;
+            max_score = 1;
+        } else {
+            min_score = -(Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
+            max_score = (1 + Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
+        }
+
+        while (min_score < max_score) {
+            int med_score = min_score + (max_score - min_score) / 2;
+            if (med_score <= 0 && med_score > min_score / 2)
+                med_score = min_score / 2;
+            else if (med_score >= 0 && med_score < max_score / 2)
+                med_score = max_score / 2;
+
+            // Only search if the actual score is greater or smaller.
+            int null_window_score = negamax(B, med_score, med_score + 1);
+            if (null_window_score <= med_score)
+                max_score = med_score;
+            else
+                min_score = med_score + 1;
+        }
+        return min_score;
+    }
+
     uint64_t getNumExploredPos() const {
         return num_explored_pos_;
     }
@@ -330,10 +357,12 @@ PYBIND11_MODULE(connectlib, m) {
 
     py::class_<Solver>(m, "Solver")
         .def(py::init<>())
-        .def("solve", [](Solver& s, const Board& b)
-            { return s.negamax(b); })
-        .def("solve_weak", [](Solver& s, const Board& b)
-            { return s.negamax(b, -1, 1); })
+        .def("negamax", [](Solver& s, const Board& b) {
+            return s.negamax(b); })
+        .def("negamax", [](Solver& s, const Board& b, int alpha, int beta) {
+            return s.negamax(b, alpha, beta); })
+        .def("dichotomicSolve", &Solver::dichotomicSolve,
+            py::arg("board"), py::arg("use_weak_solver") = false)
         .def_property_readonly("num_explored_pos", &Solver::getNumExploredPos)
         .def("reset", &Solver::reset);
 

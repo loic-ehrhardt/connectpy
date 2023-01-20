@@ -45,9 +45,9 @@ class Benchmark:
                 return 0
             return x / abs(x)
         if use_weak_solver:
-            solve_func = lambda s, b: s.solve_weak(b)
+            solve_func = lambda s, b: s.dichotomicSolve(b, use_weak_solver=True)
         else:
-            solve_func = lambda s, b: s.solve(b)
+            solve_func = lambda s, b: s.dichotomicSolve(b)
 
         compute_times = []
         explored_positions = []
