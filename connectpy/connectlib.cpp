@@ -6,6 +6,13 @@
 namespace py = pybind11;
 
 
+// Must be defined outside of the class to be known at compile time.
+constexpr uint64_t _floorMask(int width, int height) {
+    return width == 0 ? 0
+        : _floorMask(width - 1, height)
+            | (UINT64_C(1) << (width - 1) * (height + 1));
+}
+
 class Board {
 public:
     static const int WIDTH = 7;
@@ -122,6 +129,68 @@ public:
             (mask_ + bottomMask(col)) & columnMask(col)));
     }
 
+    uint64_t candidatesMask() const {
+        // All places where the current player can play.
+        uint64_t possible_moves = (mask_ + floorMask) & boardMask;
+
+        // We are forced to play where the opponent can win.
+        uint64_t opponent_win_mask = opponentWinMask();
+        uint64_t forced_mask = opponent_win_mask & possible_moves;
+        if (forced_mask) {
+            if (forced_mask & (forced_mask - 1)) {
+                // There are at least two forced moves. We cannot play anything.
+                return 0;
+            } else {
+                // We are forced to play to prevent the opponent from winning.
+                possible_moves = forced_mask;
+            }
+        }
+
+        // Do not play below opponent winning position.
+        possible_moves &= ~(opponent_win_mask >> 1);
+
+        return possible_moves;
+    }
+
+    uint64_t opponentWinMask() const {
+        return winMask(position_ ^ mask_, mask_);
+    }
+
+    uint64_t winMask() const {
+        return winMask(position_, mask_);
+    }
+
+    static uint64_t winMask(uint64_t pos, uint64_t mask) {
+        // Vertical.
+        uint64_t rv = (pos << 1) & (pos << 2) & (pos << 3);
+
+        // Horizontal.
+        uint64_t p = (pos << (HEIGHT + 1)) & (pos << 2*(HEIGHT + 1));
+        rv |= p & (pos << 3 * (HEIGHT + 1));
+        rv |= p & (pos >> (HEIGHT + 1));
+        p = (pos >> (HEIGHT + 1)) & (pos >> 2 * (HEIGHT + 1));
+        rv |= p & (pos << (HEIGHT + 1));
+        rv |= p & (pos >> 3 * (HEIGHT + 1));
+
+        // Diagonal (\).
+        p = (pos << HEIGHT) & (pos << 2 * HEIGHT);
+        rv |= p & (pos << 3 * HEIGHT);
+        rv |= p & (pos >> HEIGHT);
+        p = (pos >> HEIGHT) & (pos >> 2 * HEIGHT);
+        rv |= p & (pos << HEIGHT);
+        rv |= p & (pos >> 3 * HEIGHT);
+
+        // Diagonal (/).
+        p = (pos << (HEIGHT + 2)) & (pos << 2 * (HEIGHT + 2));
+        rv |= p & (pos << 3 * (HEIGHT + 2));
+        rv |= p & (pos >> (HEIGHT + 2));
+        p = (pos >> (HEIGHT + 2)) & (pos >> 2 * (HEIGHT + 2));
+        rv |= p & (pos << (HEIGHT + 2));
+        rv |= p & (pos >> 3 * (HEIGHT + 2));
+
+        return rv & (boardMask ^ mask);
+    }
+
     int getMoves() const {
         return moves_;
     }
@@ -132,6 +201,10 @@ public:
 
     uint64_t key() const {
         return position_ + mask_;
+    }
+
+    static constexpr uint64_t columnMask(int col) {
+        return ((UINT64_C(1) << HEIGHT) - 1) << col * (HEIGHT + 1);
     }
 
 private:
@@ -152,17 +225,17 @@ private:
     int moves_;
     Status status_;
 
-    static uint64_t topMask(int col) {
+    static constexpr uint64_t topMask(int col) {
         return (UINT64_C(1) << (HEIGHT - 1)) << col * (HEIGHT + 1);
     }
 
-    static uint64_t bottomMask(int col) {
+    static constexpr uint64_t bottomMask(int col) {
         return UINT64_C(1) << col * (HEIGHT + 1);
     }
 
-    static uint64_t columnMask(int col) {
-        return ((UINT64_C(1) << HEIGHT) - 1) << col * (HEIGHT + 1);
-    }
+    // Static constant bitmaps.
+    static const uint64_t floorMask = _floorMask(WIDTH, HEIGHT);
+    static const uint64_t boardMask = floorMask * ((UINT64_C(1) << HEIGHT) - 1);
 };
 
 
@@ -239,9 +312,14 @@ public:
             return (B.getMoves() - Board::WIDTH * Board::HEIGHT) / 2 - 1;
         }
 
-        int max_score = (1 + Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2; // direct win
+        uint64_t next = B.candidatesMask();
+        if (next == 0) {
+            // No possible other move without losing. Opponent wins next move.
+            return -(Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
+        }
 
         // Shortcut if direct win.
+        int max_score = (1 + Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
         for (int col = 0; col < Board::WIDTH; ++col) {
             if (B.canPlay(col) && B.isWinningMove(col)) {
                 return max_score;
@@ -266,7 +344,7 @@ public:
 
         // Recursive exploration.
         for (int i = 0; i < Board::WIDTH; ++i) {
-            if (B.canPlay(column_order_[i])) {
+            if (next & Board::columnMask(column_order_[i])) {
                 Board B2(B);
                 B2.play(column_order_[i], false);
                 int score = -negamax(B2, -beta, -alpha);
