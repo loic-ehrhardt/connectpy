@@ -30,7 +30,8 @@ class Benchmark:
                                "Test_L2_R1",
                                "Test_L2_R2",
                                "Test_L1_R1",
-                               "Test_L1_R2"]:
+                               "Test_L1_R2",
+                               "Test_L1_R3"]:
             print(f"=== {benchmark_name} weak ===")
             self.run(benchmark_name, use_weak_solver=True)
             print()

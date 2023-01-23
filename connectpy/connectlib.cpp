@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -191,6 +192,10 @@ public:
         return rv & (boardMask ^ mask);
     }
 
+    int countWinOpportunities(uint64_t move) const {
+        return popcount(winMask(position_ | move, mask_));
+    }
+
     int getMoves() const {
         return moves_;
     }
@@ -231,6 +236,13 @@ private:
 
     static constexpr uint64_t bottomMask(int col) {
         return UINT64_C(1) << col * (HEIGHT + 1);
+    }
+
+    static int popcount(uint64_t bitmask) {
+        int c;
+        for (c = 0; bitmask; c++)
+            bitmask &= bitmask - 1;
+        return c;
     }
 
     // Static constant bitmaps.
@@ -342,19 +354,29 @@ public:
             }
         }
 
-        // Recursive exploration.
+        // Optimize column exploration.
+        std::vector<MoveAndNumOpportunities> sorted_moves;
         for (int i = 0; i < Board::WIDTH; ++i) {
-            if (next & Board::columnMask(column_order_[i])) {
-                Board B2(B);
-                B2.play(column_order_[i], false);
-                int score = -negamax(B2, -beta, -alpha);
-                if (score >= beta) {
-                    // Outside research range (can happen for weak solver).
-                    return beta;
-                } else if (score > alpha) {
-                    // Prune alpha (keeps track of best score).
-                    alpha = score;
-                }
+            uint64_t move = next & Board::columnMask(column_order_[i]);
+            if (move) {
+                sorted_moves.emplace_back(MoveAndNumOpportunities(
+                    column_order_[i], B.countWinOpportunities(move)));
+            }
+        }
+        // reverse sort:
+        std::stable_sort(sorted_moves.rbegin(), sorted_moves.rend());
+
+        // Recursive exploration.
+        for (auto it = sorted_moves.begin(); it != sorted_moves.end(); it++) {
+            Board B2(B);
+            B2.play(it->move, false);
+            int score = -negamax(B2, -beta, -alpha);
+            if (score >= beta) {
+                // Outside research range (can happen for weak solver).
+                return beta;
+            } else if (score > alpha) {
+                // Prune alpha (keeps track of best score).
+                alpha = score;
             }
         }
 
@@ -403,6 +425,17 @@ private:
     uint64_t num_explored_pos_;
     int column_order_[Board::WIDTH];
     TranspositionTable max_score_table_;
+
+    struct MoveAndNumOpportunities {
+        int move;
+        int num_opportunities;
+
+        MoveAndNumOpportunities(int move, int num_opportunities) :
+            move(move), num_opportunities(num_opportunities) {}
+        bool operator<(const MoveAndNumOpportunities& other) const {
+            return num_opportunities < other.num_opportunities;
+        }
+    };
 };
 
 
