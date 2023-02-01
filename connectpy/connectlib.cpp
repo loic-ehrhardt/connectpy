@@ -1,6 +1,10 @@
 #include <algorithm>
+#include <fstream>
 #include <iostream>
+#include <set>
 #include <sstream>
+#include <sys/stat.h>
+#include <unordered_map>
 #include <vector>
 
 #include <pybind11/pybind11.h>
@@ -206,6 +210,21 @@ public:
 
     uint64_t key() const {
         return position_ + mask_;
+    }
+
+    uint64_t symmetricKey() const {
+        uint64_t key = this->key();
+        uint64_t rv = 0;
+        for (int col = 0; col < WIDTH; ++col) {
+            int shift = (WIDTH - 2 * col - 1) * (HEIGHT + 1);
+            uint64_t full_column_mask =
+                ((UINT64_C(1) << (HEIGHT + 1)) - 1) << col * (HEIGHT + 1);
+            if (shift >= 0)
+                rv |= (key & full_column_mask) << shift;
+            else
+                rv |= (key & full_column_mask) >> -shift;
+        }
+        return rv;
     }
 
     static constexpr uint64_t columnMask(int col) {
@@ -446,11 +465,138 @@ private:
 };
 
 
+class OpeningBook {
+public:
+    OpeningBook(size_t depth) : depth_(depth) {
+        std::cout << "Will now generate opening book for depth "
+            << depth << "." << std::endl;
+        std::cout << "This will take some time..." << std::endl;
+        generate(Board());
+    }
+
+    OpeningBook(std::string filename) {
+        // Check file size.
+        struct stat stat_buf;
+        int rc = stat(filename.c_str(), &stat_buf);
+        if (rc != 0)
+            throw std::runtime_error("Cannot get size of " + filename);
+        size_t file_size = stat_buf.st_size;
+        if (file_size % 9 != 1)
+            throw std::runtime_error("Unexpected size for " + filename);
+
+        std::ifstream file(filename, std::ios::binary);
+
+        // Read opening book depth.
+        int8_t depth_as_int8;
+        file.read(reinterpret_cast<char *>(&depth_as_int8),
+                  sizeof(depth_as_int8));
+        depth_ = depth_as_int8;
+
+        // Read opening book key -> score pairs.
+        uint64_t key;
+        int8_t score;
+        for (size_t i = 0; i < (file_size - 1) / 9; ++i) {
+            file.read(reinterpret_cast<char *>(&key), sizeof(key));
+            file.read(reinterpret_cast<char *>(&score), sizeof(score));
+            book_[key] = score;
+        }
+
+        file.close();
+    }
+
+    void dump(std::string filename) const {
+        std::ofstream file(filename, std::ios::binary);
+
+        // Header.
+        int8_t depth_as_int8 = depth_;
+        file.write(reinterpret_cast<const char *>(&depth_as_int8),
+                   sizeof(depth_as_int8));
+
+        // Key-score pairs (sorted by keys).
+        std::set<uint64_t> sorted_keys;
+        for (const auto& kv : book_)
+            sorted_keys.emplace(kv.first);
+        for (uint64_t key : sorted_keys) {
+            int8_t score = book_.at(key);
+            file.write(reinterpret_cast<const char *>(&key), sizeof(key));
+            file.write(reinterpret_cast<const char *>(&score), sizeof(score));
+        }
+        file.close();
+    }
+
+    std::pair<bool, int8_t> get(const Board& B) {
+        if ((unsigned)B.getMoves() > depth_) {
+            // We know we do not have this key.
+            return std::make_pair(false, 0);
+        }
+        auto found = book_.find(B.key());
+        if (found == book_.end()) {
+            // Not found, try symmetric key.
+            found = book_.find(B.symmetricKey());
+        }
+        if (found == book_.end())
+            return std::make_pair(false, 0);
+        else
+            return std::make_pair(true, found->second);
+    }
+
+    size_t getDepth() const {
+        return depth_;
+    }
+
+private:
+    size_t depth_;
+    std::unordered_map<uint64_t, int8_t> book_;
+
+    Solver solver_;
+
+    int8_t generate(const Board& B) {
+        // Return now if already computed (considering symmetric Board).
+        auto found = book_.find(B.key());
+        if (found != book_.end())
+            return found->second;
+        found = book_.find(B.symmetricKey());
+        if (found != book_.end())
+            return found->second;
+
+        int8_t score;
+        if (B.getStatus() != Board::Status::InProgress) {
+	        // Handle finished game.
+	        score = solver_.negamax(B);
+	    } else if ((unsigned)B.getMoves() < depth_) {
+            // Compute score on deeper depths first. The current score is then
+            // trivially computed with one negamax step.
+            score = -Board::WIDTH * Board::HEIGHT - 2; // lower bound
+            for (int col = 0; col < Board::WIDTH; ++col) {
+                if (B.canPlay(col)) {
+                    Board B2(B);
+                    B2.play(col);
+                    int8_t play_score = -generate(B2);
+                    if (score < play_score)
+                        score = play_score;
+                }
+            }
+        } else {
+            // Maximum depth. Compute score with the Solver instance.
+            score = solver_.dichotomicSolve(B);
+        }
+
+        book_[B.key()] = score;
+        std::cout << "moves=" << B.getMoves()
+                  << ", key=" << B.key()
+                  << ", score=" << (int) score << std::endl;
+        return score;
+    }
+};
+
+
 PYBIND11_MODULE(connectlib, m) {
     py::class_<Board>(m, "Board")
         .def(py::init<>())
         .def(py::init<std::string>())
         .def("__repr__", [](const Board& b) { return b.toString(); })
+        .def("key", &Board::key)
+        .def("symmetricKey", &Board::symmetricKey)
         .def("play", static_cast<void (Board::*)(std::string)>(&Board::play))
         .def("play", [](Board& b, int col) {
                 b.assertCanPlay(col - 1);
@@ -487,4 +633,11 @@ PYBIND11_MODULE(connectlib, m) {
         .def("__getitem__", &TranspositionTable::get)
         .def("__setitem__", &TranspositionTable::put)
         .def("reset", &TranspositionTable::reset);
+
+    py::class_<OpeningBook>(m, "OpeningBook")
+        .def(py::init<size_t>())
+        .def(py::init<std::string>())
+        .def_property_readonly("depth", &OpeningBook::getDepth)
+        .def("__getitem__", &OpeningBook::get)
+        .def("dump", &OpeningBook::dump);
 }

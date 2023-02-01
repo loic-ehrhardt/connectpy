@@ -1,6 +1,7 @@
 from . import connectlib as cpp
 from .connectlib import Board
 from .connectlib import GameStatus
+from .connectlib import OpeningBook
 from .connectlib import Solver
 from .connectlib import TranspositionTable
 
