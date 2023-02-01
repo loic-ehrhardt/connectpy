@@ -72,6 +72,154 @@ class Benchmark:
         print("K pos / seconds:   %.2f" % (
             0.001 * mean_explored_positions / mean_compute_time,))
 
+
+class InteractiveGame:
+    def __init__(self):
+        self.board = Board()
+        self.solver = Solver()
+        opening_book_path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "opening_book_8.bin")
+        self.opening_book = OpeningBook(opening_book_path)
+        self._score_by_key = dict()
+        self._undo_states = [self.board.key()]
+        self._undo_ix = 0
+        try:
+            import termios
+            self.input = self._read_single_key_with_termios
+        except ImportError:
+            self.input = lambda : input(">>> ")
+
+    def play(self):
+        self.print_board()
+        while True:
+            i = self.input()
+            if len(i) != 1:
+                self.print_help()
+            elif i in "1234567":
+                if self.board.status != GameStatus.InProgress:
+                    print("Game is finished.")
+                elif not self.board.canPlay(int(i)):
+                    print("Cannot play here.")
+                else:
+                    self.board.play(int(i))
+                    self._undo_ix += 1
+                    self._undo_states = self._undo_states[:self._undo_ix] \
+                                        + [self.board.key()]
+                    self.print_board()
+            elif i == "u" and self._undo_ix > 0:
+                self._undo_ix -= 1
+                self.board = Board(self._undo_states[self._undo_ix])
+                self.print_board()
+            elif i == "r" and self._undo_ix < len(self._undo_states) - 1:
+                self._undo_ix += 1
+                self.board = Board(self._undo_states[self._undo_ix])
+                self.print_board()
+            elif i == "b":
+                self.print_board()
+            elif i == "n":
+                if self.ask_confirmation("start a new game"):
+                    self.board = Board()
+                    self._undo_states = [self.board.key()]
+                    self._undo_ix = 0
+                    self.print_board()
+            elif i == "q":
+                if self.ask_confirmation("quit"):
+                    break
+            else:
+                self.print_help()
+
+    def print_board(self):
+        print()
+        for board_line in repr(self.board).splitlines():
+            print("    " + board_line)
+        print("    " + "".join(
+            chr(0xff10 + i) if self.board.canPlay(i) else "\u3000"
+            for i in range(1, 8)))
+        if self.board.status == GameStatus.InProgress:
+            play_scores = []
+            for i in range(1, 8):
+                self._print_score_line(play_scores, is_computing=True)
+                play_scores.append(self.play_score(i))
+            self._print_score_line(play_scores, is_computing=False)
+        print()
+
+    def _print_score_line(self, play_scores, is_computing):
+        score_line = "\r" # go to start of line
+        score_line += "    "
+        max_score = max([float("-inf")] + [
+            score for score in play_scores if score is not None])
+        for score in play_scores:
+            if score is None:
+                score_line += "\u3000"
+            else:
+                if score < 0:
+                    color_code = 91 # red fg
+                elif score == 0:
+                    color_code = 90 # gray fg
+                else:
+                    color_code = 92 # green fg
+                if score == max_score:
+                    color_code += 10 # bg instead of fg
+                score_line += "\033[%dm" % (color_code,)
+                if abs(score) < 10:
+                    score_line += chr(0xff10 + abs(score))
+                else:
+                    score_line += str(abs(score))
+                score_line += "\033[0m" # reset
+        if is_computing:
+            print(score_line + "\uff0d", end="")
+            sys.stdout.flush()
+        else:
+            print(score_line)
+
+    def print_help(self):
+        print("1, 2, ..., 7  play on this column")
+        print("u             undo")
+        print("r             redo")
+        print("b             print board")
+        print("n             start a new game")
+        print("q             quit")
+        print("otherwise     display help")
+
+    def ask_confirmation(self, action):
+        i = input(f">>> Are you sure you want to {action}? (y/n) ")
+        return i.lower() in ("y", "yes")
+
+    def score(self, key):
+        if key not in self._score_by_key:
+            b = Board(key)
+            if b.moves <= self.opening_book.depth:
+                (is_found, score) = self.opening_book[b]
+                assert is_found, key
+            else:
+                score = self.solver.dichotomicSolve(b)
+            self._score_by_key[key] = score
+        return self._score_by_key[key]
+
+    def play_score(self, col):
+        if not self.board.canPlay(col):
+            return None
+        b = Board(self.board.key())
+        b.play(col)
+        # Negative score because point of view of current player:
+        return -self.score(b.key())
+
+    def _read_single_key_with_termios(self):
+        import termios, tty
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        print(">>> ", end="")
+        sys.stdout.flush()
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        print(ch)
+        return ch
+
+
 def test_Board():
     def _format(lines):
         large_red_circle    = "\U0001F534"
