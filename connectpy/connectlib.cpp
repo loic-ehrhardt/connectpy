@@ -38,6 +38,35 @@ public:
         play(sequence);
     }
 
+    Board(uint64_t key) {
+        uint64_t full = key + floorMask;
+        mask_ = 0;
+        position_ = 0;
+        for (int col = 0; col < WIDTH; ++col) {
+            bool has_stones = false;
+            for (int j = HEIGHT; j >= 0; --j) {
+                bool bit = (full & pointMask(col, j)) != 0;
+                if (!has_stones && !bit) {
+                    // No stone yet.
+                } else if (!has_stones && bit) {
+                    // Stones will start below.
+                    has_stones = true;
+                } else {
+                    mask_ |= pointMask(col, j);
+                    position_ |= full & pointMask(col, j);
+                }
+            }
+        }
+        moves_ = popcount(mask_);
+        if (hasAlignment(position_ ^ mask_)) {
+            status_ = (moves_ % 2) == 1 ? Status::Player1Wins : Status::Player2Wins;
+        } else if (moves_ == HEIGHT * WIDTH) {
+            status_ = Status::Draw;
+        } else {
+            status_ = Status::InProgress;
+        }
+    }
+
     std::string toString() const {
         static const std::string large_red_circle = "\xF0\x9F\x94\xB4";
         static const std::string large_yellow_circle = "\xF0\x9F\x9F\xA1";
@@ -255,6 +284,10 @@ private:
 
     static constexpr uint64_t bottomMask(int col) {
         return UINT64_C(1) << col * (HEIGHT + 1);
+    }
+
+    static constexpr uint64_t pointMask(int col, int row) {
+        return UINT64_C(1) << row << (col * (HEIGHT + 1));
     }
 
     static int popcount(uint64_t bitmask) {
@@ -594,9 +627,11 @@ PYBIND11_MODULE(connectlib, m) {
     py::class_<Board>(m, "Board")
         .def(py::init<>())
         .def(py::init<std::string>())
+        .def(py::init<uint64_t>())
         .def("__repr__", [](const Board& b) { return b.toString(); })
         .def("key", &Board::key)
         .def("symmetricKey", &Board::symmetricKey)
+        .def("canPlay", [](const Board& b, int col) { return b.canPlay(col - 1); })
         .def("play", static_cast<void (Board::*)(std::string)>(&Board::play))
         .def("play", [](Board& b, int col) {
                 b.assertCanPlay(col - 1);
