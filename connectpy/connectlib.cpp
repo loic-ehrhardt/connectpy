@@ -18,8 +18,8 @@ class Board {
 public:
     static const int WIDTH = 7;
     static const int HEIGHT = 6;
-    static_assert(WIDTH < 10);
-    static_assert(WIDTH * (HEIGHT + 1) <= 64);
+    static_assert(WIDTH < 10, "");
+    static_assert(WIDTH * (HEIGHT + 1) <= 64, "");
 
     enum Status {
         InProgress,
@@ -166,7 +166,7 @@ public:
         uint64_t rv = (pos << 1) & (pos << 2) & (pos << 3);
 
         // Horizontal.
-        uint64_t p = (pos << (HEIGHT + 1)) & (pos << 2*(HEIGHT + 1));
+        uint64_t p = (pos << (HEIGHT + 1)) & (pos << 2 * (HEIGHT + 1));
         rv |= p & (pos << 3 * (HEIGHT + 1));
         rv |= p & (pos >> (HEIGHT + 1));
         p = (pos >> (HEIGHT + 1)) & (pos >> 2 * (HEIGHT + 1));
@@ -283,7 +283,6 @@ private:
         uint64_t key: 56;
         int8_t value;
     };
-    static_assert(sizeof(Entry) == 8);
 
     std::vector<Entry> data_;
 
@@ -305,7 +304,7 @@ public:
         // Explore columns from the middle first.
         for (int i = 0; i < Board::WIDTH; ++i)
             column_order_[i] = Board::WIDTH / 2
-                + ( 1 - 2 * (i % 2)) * (i + 1) / 2;
+                + (1 - 2 * (i % 2)) * (i + 1) / 2;
     }
 
     int negamax(const Board& B) {
@@ -324,12 +323,6 @@ public:
             return (B.getMoves() - Board::WIDTH * Board::HEIGHT) / 2 - 1;
         }
 
-        uint64_t next = B.candidatesMask();
-        if (next == 0) {
-            // No possible other move without losing. Opponent wins next move.
-            return -(Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
-        }
-
         // Shortcut if direct win.
         int max_score = (1 + Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
         for (int col = 0; col < Board::WIDTH; ++col) {
@@ -339,6 +332,12 @@ public:
         }
         // Cannot win directly, max score decreases.
         max_score--;
+
+        uint64_t next = B.candidatesMask();
+        if (next == 0) {
+            // No possible other move without losing. Opponent wins next move.
+            return -(Board::WIDTH * Board::HEIGHT - B.getMoves()) / 2;
+        }
 
         // Possibly reduce further max_score using the transposition table.
         std::pair<bool, int8_t> found = max_score_table_.get(B.key());
@@ -386,6 +385,14 @@ public:
     }
 
     int dichotomicSolve(const Board& B, bool use_weak_solver = false) {
+        // Check board status.
+        if (B.getStatus() == Board::Draw) {
+            return 0;
+        } else if (B.getStatus() == Board::Player1Wins
+                || B.getStatus() == Board::Player2Wins) {
+            return (B.getMoves() - Board::WIDTH * Board::HEIGHT) / 2 - 1;
+        }
+
         int min_score, max_score;
         if (use_weak_solver) {
             min_score = -1;
@@ -443,16 +450,13 @@ PYBIND11_MODULE(connectlib, m) {
     py::class_<Board>(m, "Board")
         .def(py::init<>())
         .def(py::init<std::string>())
-        .def("__repr__",
-            [](const Board& b) { return b.toString(); })
-
+        .def("__repr__", [](const Board& b) { return b.toString(); })
         .def("play", static_cast<void (Board::*)(std::string)>(&Board::play))
         .def("play", [](Board& b, int col) {
                 b.assertCanPlay(col - 1);
                 b.play(col - 1); })
         .def_property_readonly("moves", &Board::getMoves)
         .def_property_readonly("status", &Board::getStatus)
-
         // https://github.com/pybind/pybind11/issues/682
         .def_property_readonly_static("WIDTH",
             [](py::object) { return Board::WIDTH; })
