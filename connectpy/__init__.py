@@ -79,6 +79,10 @@ def test_Board():
         return "\n".join(lines).replace(".", white_square_button) \
                                .replace("O", large_red_circle) \
                                .replace("X", large_yellow_circle)
+    def _other_asserts(board):
+        assert repr(Board(board.key())) == repr(Board(board.key()))
+        assert board.key() == Board(board.symmetricKey()).symmetricKey()
+
     board1 = Board("44455554221")
     assert board1.status == GameStatus.InProgress
     assert repr(board1) == _format([
@@ -88,6 +92,8 @@ def test_Board():
         "...OX..",
         ".X.XO..   11 moves",
         "OO.OX..   X's turn"])
+    _other_asserts(board1)
+
     board2 = Board("4455326")
     assert board2.status == GameStatus.Player1Wins
     assert repr(board2) == _format([
@@ -97,6 +103,8 @@ def test_Board():
         ".......",
         "...XX..   7 moves",
         ".XOOOO.   winner: O"])
+    _other_asserts(board2)
+
     board3 = Board("121212212121343434434343565656656565777777")
     assert board3.status == GameStatus.Draw
     assert repr(board3) == _format([
@@ -106,3 +114,14 @@ def test_Board():
         "OXOXOXO",
         "OXOXOXX   42 moves",
         "OXOXOXO   draw"])
+    _other_asserts(board3)
+
+def test_TranspositionTable():
+    t = TranspositionTable(10)
+    for i in range(13):
+        t[i] = 10 * (i - 8)
+    assert [(i, t[i]) for i in range(15)] == [
+        (0, (False,  0)), (1, (False,  0)), (2, (False,  0)), (3, (True, -50)),
+        (4, (True, -40)), (5, (True, -30)), (6, (True, -20)), (7, (True, -10)),
+        (8, (True,   0)), (9, (True,  10)), (10, (True, 20)), (11, (True, 30)),
+        (12, (True, 40)), (13, (False, 0)), (14, (False, 0))]
